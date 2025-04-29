@@ -65,6 +65,7 @@ func uploadToS3() {
 	})
 	if err != nil {
 		fmt.Println("failed to upload")
+		fmt.Println(err)
 	}
 
 	fmt.Println("Upload successful!")
