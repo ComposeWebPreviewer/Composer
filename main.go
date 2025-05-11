@@ -86,7 +86,7 @@ func uploadToS3() error {
 			file, _ := os.Open(fileName)
 			_, err = client.PutObject(context.TODO(), &s3.PutObjectInput{
 				Bucket:      aws.String(bucket),
-				Key:         aws.String(fileName),
+				Key:         aws.String(filepath.Base(fileName)),
 				Body:        file,
 				IfNoneMatch: aws.String("*"),
 			})
