@@ -1,8 +1,10 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -40,7 +42,6 @@ func decodeCode(encodedCode string) (string, error) {
 		return "", err
 	}
 	fmt.Println("Decoded Code")
-	fmt.Println(string(decodedCode))
 
 	return string(decodedCode), nil
 }
@@ -56,9 +57,12 @@ func buildComposableBinaries(snippet string) error {
 	cmd := exec.Command("./gradlew", "wasmJsBrowserDistribution")
 	cmd.Dir = "/tmp"
 
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+
 	_, err := cmd.Output()
 	if err != nil {
-		return err
+		return errors.New(stderr.String())
 	}
 
 	fmt.Println("WASM generated")
@@ -93,9 +97,9 @@ func uploadToS3() error {
 			if err != nil {
 				fmt.Println("failed to upload")
 				fmt.Println(err)
+			} else {
+				fmt.Println("Upload successful!")
 			}
-
-			fmt.Println("Upload successful!")
 		}()
 	}
 
