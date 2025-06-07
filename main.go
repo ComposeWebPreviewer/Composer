@@ -13,11 +13,15 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
+	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 )
 
+var codespaceTableName = os.Getenv("CODESPACEDB_TABLE_NAME")
+
 func main() {
-	decodedCode, err := decodeCode(os.Args[1])
+	decodedCode, err := decodeCode(os.Args[2])
 	if err != nil {
 		fmt.Printf(err.Error())
 		panic(err)
@@ -29,11 +33,25 @@ func main() {
 		panic(err)
 	}
 
-	err = uploadToS3()
+	cfg, err := config.LoadDefaultConfig(context.TODO())
 	if err != nil {
-		fmt.Printf(err.Error())
+		fmt.Printf("Unable to load SDK config, %v", err)
 		panic(err)
 	}
+
+	wasmFilePath := wasmFilePath()
+
+	var waitGroup sync.WaitGroup
+	waitGroup.Add(2)
+	go func() {
+		defer waitGroup.Done()
+		uploadToS3(cfg, wasmFilePath)
+	}()
+	go func() {
+		defer waitGroup.Done()
+		writeDataToCodespaceDB(cfg, os.Args[1], os.Args[2], wasmFilePath)
+	}()
+	waitGroup.Wait()
 }
 
 func decodeCode(encodedCode string) (string, error) {
@@ -70,40 +88,53 @@ func buildComposableBinaries(snippet string) error {
 	return nil
 }
 
-func uploadToS3() error {
-	bucket := os.Getenv("S3_BUCKET")
+func wasmFilePath() string {
+	matches, _ := filepath.Glob("/tmp/composeApp/build/kotlin-webpack/wasmJs/productionExecutable/*.wasm")
+	leastSizeMatch := matches[0]
+	for _, filePath := range matches {
+		leastSizeMatchFileInfo, _ := os.Stat(leastSizeMatch)
+		currFileInfo, _ := os.Stat(filePath)
 
-	cfg, err := config.LoadDefaultConfig(context.TODO())
-	if err != nil {
-		return err
+		if currFileInfo.Size() < leastSizeMatchFileInfo.Size() {
+			leastSizeMatch = filePath
+		}
 	}
+
+	return leastSizeMatch
+}
+
+func uploadToS3(cfg aws.Config, wasmFilePath string) {
+	bucket := os.Getenv("S3_BUCKET")
 
 	client := s3.NewFromConfig(cfg)
 
-	matches, _ := filepath.Glob("/tmp/composeApp/build/kotlin-webpack/wasmJs/productionExecutable/*.wasm")
-	var waitGroup sync.WaitGroup
-	for _, fileName := range matches {
-		waitGroup.Add(1)
-		go func() {
-			defer waitGroup.Done()
+	file, _ := os.Open(wasmFilePath)
+	filename := filepath.Base(wasmFilePath)
+	_, err := client.PutObject(context.TODO(), &s3.PutObjectInput{
+		Bucket: aws.String(bucket),
+		Key: aws.String(filename),
+		Body: file,
+		IfNoneMatch: aws.String("*"),
+	})
 
-			file, _ := os.Open(fileName)
-			_, err = client.PutObject(context.TODO(), &s3.PutObjectInput{
-				Bucket:      aws.String(bucket),
-				Key:         aws.String(filepath.Base(fileName)),
-				Body:        file,
-				IfNoneMatch: aws.String("*"),
-			})
-			if err != nil {
-				fmt.Println("failed to upload")
-				fmt.Println(err)
-			} else {
-				fmt.Println("Upload successful!")
-			}
-		}()
+	if err == nil {
+		fmt.Println("Upload successful")
 	}
+}
 
-	waitGroup.Wait()
+func writeDataToCodespaceDB(cfg aws.Config, id string, code string, wasmFilePath string) {
+	client := dynamodb.NewFromConfig(cfg)
 
-	return nil
+	_, err := client.PutItem(context.TODO(), &dynamodb.PutItemInput{
+		TableName: aws.String(codespaceTableName),
+		Item: map[string]types.AttributeValue{
+			"id": &types.AttributeValueMemberS{Value: id},
+			"code": &types.AttributeValueMemberS{Value: code},
+			"wasm": &types.AttributeValueMemberS{Value: filepath.Base(wasmFilePath)},
+		},
+	})
+
+	if err == nil {
+		fmt.Println("Write to codebase db done")
+	}
 }
