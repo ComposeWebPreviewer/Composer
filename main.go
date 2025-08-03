@@ -114,6 +114,7 @@ func uploadToS3(cfg aws.Config, wasmFilePath string) {
 		Bucket: aws.String(bucket),
 		Key: aws.String(filename),
 		Body: file,
+		ContentType: aws.String("application/wasm"),
 		IfNoneMatch: aws.String("*"),
 	})
 
