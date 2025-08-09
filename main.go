@@ -78,7 +78,7 @@ func buildComposableBinaries(snippet string) error {
 		0644,
 	)
 
-	cmd := exec.Command("./gradlew", "wasmJsBrowserDistribution")
+	cmd := exec.Command("./gradlew", "wasmJsBrowserProductionWebpack")
 	cmd.Dir = "/tmp"
 
 	var stderr bytes.Buffer

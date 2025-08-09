@@ -1,0 +1,6 @@
+**/*.iml
+**/.kotlin
+**/.gradle
+**/build/
+**/xcuserdata
+**/.idea
