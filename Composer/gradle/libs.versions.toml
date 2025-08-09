@@ -1,11 +1,8 @@
 [versions]
-kotlin = "2.1.10"
-composeMultiplatform = "1.8.1"
-androidx-lifecycle = "2.9.0"
+kotlin = "2.2.0"
+composeMultiplatform = "1.8.2"
 
 [libraries]
-androidx-lifecycle-viewmodel = { group = "org.jetbrains.androidx.lifecycle", name = "lifecycle-viewmodel", version.ref = "androidx-lifecycle" }
-androidx-lifecycle-runtime-compose = { group = "org.jetbrains.androidx.lifecycle", name = "lifecycle-runtime-compose", version.ref = "androidx-lifecycle" }
 
 [plugins]
 composeCompiler = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
