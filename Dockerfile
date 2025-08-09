@@ -11,4 +11,7 @@ FROM eclipse-temurin:11
 COPY --from=build /src/app /usr/local/bin/
 COPY ./Composer /tmp
 
+RUN cd /tmp && \
+    ./gradlew wasmJsBrowserDistribution
+
 CMD ["/usr/local/bin/app"]

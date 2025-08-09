@@ -33,23 +33,29 @@ func main() {
 		panic(err)
 	}
 
+	wasmFilePath := wasmFilePath()
+
+	gzippedFilePath, err := gzipFile(wasmFilePath)
+	if err != nil {
+		fmt.Printf("Error gzipping file: %v", err)
+		panic(err)
+	}
+
 	cfg, err := config.LoadDefaultConfig(context.TODO())
 	if err != nil {
 		fmt.Printf("Unable to load SDK config, %v", err)
 		panic(err)
 	}
 
-	wasmFilePath := wasmFilePath()
-
 	var waitGroup sync.WaitGroup
 	waitGroup.Add(2)
 	go func() {
 		defer waitGroup.Done()
-		uploadToS3(cfg, wasmFilePath)
+		uploadToS3(cfg, gzippedFilePath)
 	}()
 	go func() {
 		defer waitGroup.Done()
-		writeDataToCodespaceDB(cfg, os.Args[1], os.Args[2], wasmFilePath)
+		writeDataToCodespaceDB(cfg, os.Args[1], os.Args[2], gzippedFilePath)
 	}()
 	waitGroup.Wait()
 }
@@ -78,11 +84,12 @@ func buildComposableBinaries(snippet string) error {
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 
-	_, err := cmd.Output()
+	output, err := cmd.Output()
 	if err != nil {
 		return errors.New(stderr.String())
 	}
 
+	fmt.Println(string(output))
 	fmt.Println("WASM generated")
 
 	return nil
@@ -103,6 +110,23 @@ func wasmFilePath() string {
 	return leastSizeMatch
 }
 
+func gzipFile(filePath string) (string, error) {
+	cmd := exec.Command("gzip", "--best", filePath)
+	err := cmd.Run()
+	if err != nil {
+		return "", err
+	}
+
+	gzippedFilePath := filePath + ".gz"
+	if _, err := os.Stat(gzippedFilePath); os.IsNotExist(err) {
+		return "", fmt.Errorf("gzipped file %s does not exist", gzippedFilePath)
+	}
+
+	fmt.Println("Gzipped file created")
+
+	return gzippedFilePath, nil
+}
+
 func uploadToS3(cfg aws.Config, wasmFilePath string) {
 	bucket := os.Getenv("S3_BUCKET")
 
@@ -114,6 +138,7 @@ func uploadToS3(cfg aws.Config, wasmFilePath string) {
 		Bucket: aws.String(bucket),
 		Key: aws.String(filename),
 		Body: file,
+		ContentEncoding: aws.String("gzip"),
 		ContentType: aws.String("application/wasm"),
 		IfNoneMatch: aws.String("*"),
 	})
